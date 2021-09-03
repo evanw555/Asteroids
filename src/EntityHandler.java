@@ -3,9 +3,12 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.Queue;
 
 public class EntityHandler{
-	private ArrayList<Entity> ents, purgatory;
+	private ArrayList<Entity> ents;
+	private Queue<Entity> purgatory;
 	private ArrayList<TimedEntityShell> timedPurgatory;
 	private Player[] players;
 	private int asteroidsDestroyed;
@@ -13,7 +16,7 @@ public class EntityHandler{
 	
 	public EntityHandler(Player...players){
 		ents = new ArrayList<Entity>();
-		purgatory = new ArrayList<Entity>();
+		purgatory = new LinkedList<>();
 		timedPurgatory = new ArrayList<TimedEntityShell>();
 		this.players = players;
 		this.asteroidsDestroyed = 0;
@@ -34,30 +37,57 @@ public class EntityHandler{
 		//remove duplicates of players
 		removePlayerDuplicates();
 		//transfer each entity from purgatory to ents
-		for(Entity e : purgatory)
-			ents.add(e);
-		purgatory.clear();
+		allocateEntities();
 		//update each entity on ents
-		for(Entity e : ents)
-			e.update();
+		int lastAliveIndex = -1;
+		for(int i = 0; i < ents.size(); i++) {
+			final Entity e = ents.get(i);
+			if (!e.isDead()) {
+				e.update();
+				lastAliveIndex = i;
+			}
+		}
+		if (lastAliveIndex > 0 && lastAliveIndex + 1 < ents.size() && lastAliveIndex < Math.floor(ents.size() * .8)) {
+			ents.subList(lastAliveIndex + 1, ents.size()).clear();
+		}
 		//check collisions
 		checkCollisions();
 		//handle random entity addition if not between waves
 		if(!Refs.game.isInterwavePhase())
 			addRandomEntities();
 	}
+
+	private void allocateEntities() {
+		int entsIndex = 0;
+		Entity poppedPurgatoryEntity = purgatory.poll();
+		while (poppedPurgatoryEntity != null) {
+			if (entsIndex < ents.size()) {
+				if (ents.get(entsIndex).isDead()) {
+					ents.set(entsIndex, poppedPurgatoryEntity);
+					poppedPurgatoryEntity = purgatory.poll();
+				}
+				entsIndex++;
+			} else {
+				ents.add(poppedPurgatoryEntity);
+				poppedPurgatoryEntity = purgatory.poll();
+			}
+		}
+		purgatory.clear();
+	}
 	
 	public void cleanUp(){
-		for(int i = 0; i < ents.size(); i++)
-			if(ents.get(i).isDead()){
-				ents.remove(i);
-				i--;
-			}
+//		for(int i = 0; i < ents.size(); i++)
+//			if(ents.get(i).isDead()){
+//				ents.remove(i);
+//				i--;
+//			}
 	}
 	
 	public void paint(Graphics g){
 		for(Entity e : ents)
-			e.paint(g);
+			if (!e.isDead()) {
+				e.paint(g);
+			}
 		//game over text
 		if(!Util.contains(ents, Player.class) && timedPurgatory.isEmpty()){
 			g.setColor(Color.RED);
@@ -76,6 +106,25 @@ public class EntityHandler{
 			g.drawString("Finished 11 June 2012",
 					Refs.canvas.getPlayableWidth()/4, Refs.canvas.getHeight()/2+210);
 		}
+
+		// Paint representation of the entity list
+		for (int i = 0; i < ents.size(); i++) {
+			if (ents.get(i).isDead()) {
+				g.setColor(Color.RED);
+			} else {
+				g.setColor(Color.GREEN);
+			}
+			final int numPerRow = Refs.canvas.getPlayableWidth() / 8;
+			final int row = i / numPerRow;
+			final int col = i % numPerRow;
+			g.fillRect(col * 8, row * 8, 8, 8);
+			g.setColor(Color.BLACK);
+			g.drawRect(col * 8, row * 8, 8, 8);
+		}
+
+		g.setFont(new Font("Arial", Font.PLAIN, 14));
+		g.setColor(Color.WHITE);
+		g.drawString(String.format("ents size = %d, purgatory size = %d", ents.size(), purgatory.size()), 100, 40);
 	}
 	
 	public void add(Entity e){

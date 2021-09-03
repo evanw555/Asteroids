@@ -56,7 +56,9 @@ public class TimedParticle extends Entity{
 	public void update(){
 		x += vx;
 		y += vy;
-		duration--;
+		if (duration > 0) {
+			duration--;
+		}
 		switch(type){
 		case EMP:
 			vx *= .99;
